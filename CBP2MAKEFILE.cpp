@@ -13,16 +13,18 @@
 #include <iterator>
 
 #include <libxml/parser.h>
+//#define CUSTOM
+#define Linux
 
 struct Config
 {
 	std::string compiler;
-	std::vector<std::string> compilerOptions;	
+	std::vector<std::string> compilerOptions;
 	std::vector<std::string> compilerDirectories;
 	std::vector<std::string> cppFiles;
 	std::vector<std::string> otherFiles;
 	std::string compilerOutput;
-	
+
 	std::vector<std::string> resourceOptions;
 	std::vector<std::string> resourceDirectories;
 	std::string resourceOutput;
@@ -54,9 +56,9 @@ void HandleTarget(xmlNode * targetNode, bool global)
 		if (node1->type == XML_ELEMENT_NODE && !strcmp((const char*)node1->name, "Option"))
 		{
 			if (xmlHasProp(node1, (const xmlChar*)"object_output"))
-			{				
-				std::string output_option = (const char*)xmlGetProp(node1, (const xmlChar*)"object_output");				
-				configs[target].compilerOutput = output_option;				
+			{
+				std::string output_option = (const char*)xmlGetProp(node1, (const xmlChar*)"object_output");
+				configs[target].compilerOutput = output_option;
 			}
 			if (xmlHasProp(node1, (const xmlChar*)"output"))
 			{
@@ -65,7 +67,7 @@ void HandleTarget(xmlNode * targetNode, bool global)
 			}
 			if (xmlHasProp(node1, (const xmlChar*)"compiler"))
 			{
-				std::string compiler = (const char*)xmlGetProp(node1, (const xmlChar*)"compiler");				
+				std::string compiler = (const char*)xmlGetProp(node1, (const xmlChar*)"compiler");
 				configs[target].compiler = compiler;
 			}
 		}
@@ -118,15 +120,15 @@ void HandleTarget(xmlNode * targetNode, bool global)
 			}
 		}
 		if (node1->type == XML_ELEMENT_NODE && !strcmp((const char*)node1->name, "Unit"))
-		{			
+		{
 			std::string filename = (const char*)xmlGetProp(node1, (const xmlChar*)"filename");
-			if (filename.substr(filename.size()-4)==".cpp" || filename.substr(filename.size() - 2) == ".c")
+			if (filename.substr(filename.size()-4)==".cpp" || filename.substr(filename.size() - 2)==".c" || filename.substr(filename.size() - 2)== ".h")
 				configs[target].cppFiles.push_back(filename);
 			else
 				configs[target].otherFiles.push_back(filename);
 		}
 		node1 = node1->next;
-	}		
+	}
 }
 
 void replaceAll(std::string& str, const std::string& from, const std::string& to) {
@@ -165,7 +167,11 @@ std::string getObjectFileName(std::string output, std::string cppFile)
 	{
 		objectfilename = output;
 		if (objectfilename[objectfilename.size() - 1]!='\\' && objectfilename[objectfilename.size() - 1] != '/')
+			#ifdef Linux
+			objectfilename += "/"; // windows was 2 other slashes
+			#else
 			objectfilename += "\\";
+			#endif
 	}
 
 	objectfilename += cppFile.substr(0, cppFile.size() - 4) + ".o";
@@ -249,6 +255,12 @@ int main(int argc, char* argv[])
 
 			std::vector<std::string> specCppFiles = configs[target].cppFiles;
 			std::vector<std::string> genericCppFiles = configs[""].cppFiles;
+			std::vector<std::string> specotherFiles = configs[target].otherFiles;
+			std::vector<std::string> genericotherFiles = configs[""].otherFiles;
+
+			std::vector<std::string> allotherFiles;
+			allotherFiles.insert(allotherFiles.end(), std::make_move_iterator(specotherFiles.begin()), std::make_move_iterator(specotherFiles.end()));
+			allotherFiles.insert(allotherFiles.end(), std::make_move_iterator(genericotherFiles.begin()), std::make_move_iterator(genericotherFiles.end()));
 
 			std::vector<std::string> allCppFiles;
 			allCppFiles.insert(allCppFiles.end(), std::make_move_iterator(specCppFiles.begin()), std::make_move_iterator(specCppFiles.end()));
@@ -294,9 +306,20 @@ int main(int argc, char* argv[])
 			for (size_t j = 0; j < allCppFiles.size(); j++)
 			{
 				allObjFiles.push_back("\"" + getObjectFileName(outDir, allCppFiles[j]) + "\"");
-				makefile << "\t" << "g++" << " " << implode(allCompilerOptions, " ", "") << " " << implode(allCompilerDirectories, " ", "-I") << " -c \"" << allCppFiles[j] << "\" -o \"" << getObjectFileName(outDir, allCppFiles[j]) << "\"" << std::endl;
+				#ifdef CUSTOM
+								makefile << allCppFiles[j] << " ";
+				#else
+                    makefile << "\t" << "g++" << " " << implode(allCompilerOptions, " ", "") << " " << implode(allCompilerDirectories, " ", "-I") << " -c \"" << allCppFiles[j] << "\" -o \"" << getObjectFileName(outDir, allCppFiles[j]) << "\"" << std::endl;
+				#endif
 			}
-			
+			#ifdef CUSTOM
+					for (size_t j = 0; j < allotherFiles.size(); j++)
+			{
+				//allotherFiles.push_back("\"" + getObjectFileName(outDir, allotherFiles[j]) + "\"");
+				makefile << allotherFiles[j] << " t";
+			}
+			#endif
+
 			outDir = configs[target].linkerOutput;
 			outDir = parent(outDir);
 
@@ -304,8 +327,12 @@ int main(int argc, char* argv[])
 			{
 				makefile << "\tmkdir -p \"" << outDir << "\"" << std::endl;
 			}
-			
+
+			#ifdef Linux
+			std::string exeFileName = configs[target].linkerOutput;
+			#else
 			std::string exeFileName = configs[target].linkerOutput + ".exe";
+			#endif
 
 			makefile << "\t" << "g++" << " " << implode(allLinkerOptions, " ", "") << " " << implode(allLinkerDirectories, " ", "-L") << " -o \"" << exeFileName << "\" " << implode(allObjFiles, " ", "") << " " << implode(allLibraries, " ", "-l") << std::endl;
 

@@ -122,7 +122,7 @@ void HandleTarget(xmlNode * targetNode, bool global)
 		if (node1->type == XML_ELEMENT_NODE && !strcmp((const char*)node1->name, "Unit"))
 		{
 			std::string filename = (const char*)xmlGetProp(node1, (const xmlChar*)"filename");
-			if (filename.substr(filename.size()-4)==".cpp" || filename.substr(filename.size() - 2)==".c" || filename.substr(filename.size() - 2)== ".h")
+			if (filename.substr(filename.size()-4)==".cpp" || filename.substr(filename.size() - 2)==".c")
 				configs[target].cppFiles.push_back(filename);
 			else
 				configs[target].otherFiles.push_back(filename);
